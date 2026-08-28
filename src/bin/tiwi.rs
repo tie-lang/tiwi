@@ -102,7 +102,6 @@ fn run_gui() {
         }
         _ => {}
     });    table.set_rows(rows.lock().unwrap().len() as i32 + 1);
-    col.end();
 
     let mut btn_row = Pack::default().with_size(800, 30);
     btn_row.set_type(fltk::group::PackType::Horizontal);
@@ -115,6 +114,8 @@ fn run_gui() {
     let mut buf = TextBuffer::default();
     log.set_buffer(buf.clone());
     log.set_text_color(Color::Black);
+
+    col.end();
 
     win.end();
 
@@ -173,33 +174,33 @@ fn run_gui() {
 }
 
 fn field(parent: &mut Pack, label: &str, dflt: &str) -> Input {
-    let mut row = Pack::default().with_size(640, 26);
+    let mut row = Pack::default().with_size(800, 26);
     row.set_type(fltk::group::PackType::Horizontal);
     row.set_spacing(8);
-    let mut l = Frame::default().with_size(140, 24).with_label(label);
+    row.begin();
+    let mut l = Frame::default().with_size(150, 24).with_label(label);
     l.set_align(fltk::enums::Align::Left | fltk::enums::Align::Inside);
-    let mut i = Input::default().with_size(500, 26);
+    let mut i = Input::default().with_size(620, 26);
     i.set_value(&dflt);
     row.end();
-    parent.add(&i);
-    parent.add(&l);
+    parent.add(&row);
     i
 }
 
 fn choice(parent: &mut Pack, label: &str, items: &[&str]) -> Choice {
-    let mut row = Pack::default().with_size(640, 26);
+    let mut row = Pack::default().with_size(800, 26);
     row.set_type(fltk::group::PackType::Horizontal);
     row.set_spacing(8);
-    let mut l = Frame::default().with_size(140, 24).with_label(label);
+    row.begin();
+    let mut l = Frame::default().with_size(150, 24).with_label(label);
     l.set_align(fltk::enums::Align::Left | fltk::enums::Align::Inside);
-    let mut c = Choice::default().with_size(240, 26);
+    let mut c = Choice::default().with_size(260, 26);
     for it in items {
         c.add_choice(it);
     }
     c.set_value(0);
     row.end();
-    parent.add(&c);
-    parent.add(&l);
+    parent.add(&row);
     c
 }
 
