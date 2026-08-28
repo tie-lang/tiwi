@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "tiwi — tie 安装程序制作器 (FLTK/Rust, Windows)"
 license-file = "LICENSE"
+autobins = false
 
 # 六边形架构：core(纯逻辑库) + 两个二进制共芯
 #   bin/tiwi  —— GUI(FLTK) ；--build 时退化为无头 CLI

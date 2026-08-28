@@ -1,13 +1,16 @@
 //! tiwi 入口：`--build <proj> [--out <dir>]` 走无头 CLI；无参则启动 FLTK GUI。
-//! GUI 是 core 的薄适配层（六边形架构的"适配器"）：UI 不持有任何构建逻辑。
+//! GUI 是 core 的薄适配层（六边形架构的"适配器"）：UI 不持有任何构建逻辑，
+//! 布局/控件工厂抽到 gui 模块，选项声明与构建装配分离。
+mod gui;
 use fltk::{
     app, button::{Button, CheckButton}, draw,
-    enums::{Align, Color, Font, FrameType},
+    enums::{Color, Font, FrameType},
     frame::Frame, group::{Pack, PackType},
-    input::Input, menu::Choice, prelude::*,
+    prelude::*,
     table::{TableContext, TableRow}, text::{TextBuffer, TextDisplay},
     window::Window,
 };
+use gui::{field, choice, checkrow, header_of, section, COL, CONTENT_W, MARGIN, WIN_H, WIN_W};
 use std::sync::{Arc, Mutex};
 use tiwi::core::builder;
 use tiwi::core::manifest::{FileMap, Project};
@@ -16,14 +19,6 @@ type Rows = Arc<Mutex<Vec<Vec<String>>>>;
 
 /// 表格行数据（全局承载：draw_cell 闭包需零捕获以满足 HRTB 泛型签名）
 static FILE_ROWS: std::sync::OnceLock<Rows> = std::sync::OnceLock::new();
-
-/// 布局常量
-const COL: i32 = 416;
-const LABEL: i32 = 150;
-const WIN_W: i32 = 880;
-const WIN_H: i32 = 756;
-const MARGIN: i32 = 12;
-const CONTENT_W: i32 = WIN_W - MARGIN * 2 - 24;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -100,32 +95,34 @@ fn run_gui() {
 
     // ---- 区块 2：构建配置 ----
     section(&mut col, "构建配置");
-    let mut row_build = Pack::default().with_size(CONTENT_W, 56);
+    let mut row_build = Pack::default().with_size(CONTENT_W, 116);
     row_build.set_type(PackType::Horizontal);
     row_build.set_spacing(12);
-    let mut col_b1 = Pack::default().with_size(COL, 56);
+    let mut col_b1 = Pack::default().with_size(COL, 116);
     col_b1.set_type(PackType::Vertical);
     col_b1.set_spacing(4);
     let i_out = field(&mut col_b1, COL, "输出目录", "out");
     let i_install = field(&mut col_b1, COL, "安装目录(留空=默认)", "");
-    let mut col_b2 = Pack::default().with_size(COL, 56);
+    let i_trmreq = field(&mut col_b1, COL, "TRM 版本要求", "^0");
+    let mut col_b2 = Pack::default().with_size(COL, 116);
     col_b2.set_type(PackType::Vertical);
     col_b2.set_spacing(4);
     let i_trmsrc = field(&mut col_b2, COL, "TRM 目录(bundle)", "");
     let cb_bundle = checkrow(&mut col_b2, COL, "捆绑 TRM", false, "随包携带 TRM 运行时");
+    let i_uninstall = field(&mut col_b2, COL, "卸载命令(可选)", "");
     row_build.add(&col_b1);
     row_build.add(&col_b2);
     col.add(&row_build);
 
     // ---- 区块 3：文件清单 ----
     section(&mut col, "文件清单");
-    let mut table = TableRow::default().with_size(CONTENT_W, 210);
+    let mut table = TableRow::default().with_size(CONTENT_W, 200);
     table.set_cols(3);
     table.set_col_header(false);
     table.set_col_width(0, 330);
     table.set_col_width(1, 330);
     table.set_col_width(2, 110);
-        table.draw_cell(|_t, ctx, row, col, x, y, w, h| match ctx {
+    table.draw_cell(|_t, ctx, row, col, x, y, w, h| match ctx {
         TableContext::Cell => {
             let header = row == 0;
             let text = match FILE_ROWS.get() {
@@ -182,7 +179,7 @@ fn run_gui() {
 
     // ---- 状态栏 ----
     let mut status = Frame::default().with_size(CONTENT_W, 22);
-    status.set_align(Align::Left | Align::Inside);
+    status.set_align(fltk::enums::Align::Left | fltk::enums::Align::Inside);
     status.set_label_color(Color::DarkBlue);
     status.set_label("就绪 — 输出目录: out");
 
@@ -223,7 +220,9 @@ fn run_gui() {
             p.payload.format = i_format.text(i_format.value()).unwrap_or_default();
             p.payload.compile = i_compile.text(i_compile.value()).unwrap_or_default();
             p.payload.optimize = i_opt.value();
+            p.trm.require = if i_trmreq.value().is_empty() { "^0".into() } else { i_trmreq.value() };
             p.trm.bundle = cb_bundle.is_checked();
+            p.uninstall.cmd = i_uninstall.value();
             p.build.out_dir = if i_out.value().is_empty() { "out".into() } else { i_out.value() };
             p.build.install_dir = i_install.value();
             p.build.trm_source = i_trmsrc.value();
@@ -264,73 +263,5 @@ fn run_gui() {
                 buf.append(&m);
             }
         }
-    }
-}
-
-// ---------------- 布局助手 ----------------
-
-/// 分区标题条
-fn section(parent: &mut Pack, title: &str) {
-    let mut f = Frame::default().with_size(CONTENT_W, 22);
-    f.set_frame(FrameType::DownFrame);
-    f.set_label(&title);
-    f.set_label_color(Color::DarkBlue);
-    f.set_label_size(13);
-    parent.add(&f);
-}
-
-/// 标签 + 输入框 行（纵向 Pack 内一行）
-fn field(parent: &mut Pack, w: i32, label: &str, dflt: &str) -> Input {
-    let mut row = Pack::default().with_size(w, 26);
-    row.set_type(PackType::Horizontal);
-    row.set_spacing(8);
-    row.begin();
-    let mut l = Frame::default().with_size(LABEL, 24).with_label(label);
-    l.set_align(Align::Left | Align::Inside);
-    let mut i = Input::default().with_size(w - LABEL - 8, 26);
-    i.set_value(&dflt);
-    row.end();
-    parent.add(&row);
-    i
-}
-
-/// 标签 + 下拉框 行
-fn choice(parent: &mut Pack, w: i32, label: &str, items: &[&str]) -> Choice {
-    let mut row = Pack::default().with_size(w, 26);
-    row.set_type(PackType::Horizontal);
-    row.set_spacing(8);
-    row.begin();
-    let mut l = Frame::default().with_size(LABEL, 24).with_label(label);
-    l.set_align(Align::Left | Align::Inside);
-    let mut c = Choice::default().with_size(w - LABEL - 8, 26);
-    for it in items {
-        c.add_choice(it);
-    }
-    c.set_value(0);
-    row.end();
-    parent.add(&row);
-    c
-}
-
-/// 标签 + 复选框 行
-fn checkrow(parent: &mut Pack, w: i32, label: &str, dflt: bool, tip: &str) -> CheckButton {
-    let mut row = Pack::default().with_size(w, 26);
-    row.set_type(PackType::Horizontal);
-    row.set_spacing(8);
-    row.begin();
-    let mut l = Frame::default().with_size(LABEL, 24).with_label(label);
-    l.set_align(Align::Left | Align::Inside);
-    let mut c = CheckButton::default().with_size(w - LABEL - 8, 26).with_label(tip);
-    if dflt { c.set_value(true); }
-    row.end();
-    parent.add(&row);
-    c
-}
-
-fn header_of(col: i32) -> &'static str {
-    match col {
-        0 => "源文件(相对工程)",
-        1 => "目标(安装树)",
-        _ => "可执行",
     }
 }

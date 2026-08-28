@@ -5,3 +5,6 @@
 out/
 *.payload.zip
 *.setup.exe.tmp
+*.tiwi.json
+tie/demo/*.exe
+tie/demo/hello.txt

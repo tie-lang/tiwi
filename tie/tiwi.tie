@@ -1,0 +1,248 @@
+type tie<class>
+// tiwi.tie —— tiwi 的 tie 语言客户端库（Inno 风格脚本化安装包制作）。
+// 用法（tie 脚本，tiec 编译后运行）：
+//   import "./tiwi.tie"
+//   tiwi.app("my-app", "org.tie.my", "1.0.0", "ACME")
+//   tiwi.preset("trm-detect")
+//   tiwi.file("bin/app.exe", "app.exe", true)
+//   tiwi.shortcut("MyApp", "@app/app.exe", "")
+//   tiwi.build()
+// 语义：状态登记在模块级表中（命名空间内函数裸引用，同 std/json.tie
+// 的模块级全局模式），build() 序列化为 <name>-<version>.tiwi.json 清单，
+// 然后调用 tiwi 命令行（`tiwi --build <json>`，PATH 查找）组装 setup.exe。
+// 零外部依赖：仅用底座原语 + libc system（链接 msvcrt，同 std/process.tie 方案）。
+// 路径注意：清单文件落在当前工作目录，files.from 相对运行目录解析。
+
+// libc system：执行命令并返回退出码（仅编译路径可用，同 std/process.tie）。
+unsafe extern fn system(cmd: string) -> i32;
+
+// ---------------- 模块级状态（命名空间外，函数裸引用） ----------------
+var g_id: string = ""
+var g_name: string = "app"
+var g_version: string = "1.0.0"
+var g_publisher: string = ""
+var g_preset: string = "bare"
+var g_format: string = "binary"
+var g_compile: string = "target"
+var g_optimize: string = "-O2"
+var g_entry: string = ""
+var g_trm_req: string = "^0"
+var g_trm_bundle: bool = false
+var g_trm_home: string = "C:\tie\trm"
+var g_out: string = "out"
+var g_install: string = ""
+var g_trm_source: string = ""
+var g_template: string = ""
+var g_uninst_cmd: string = ""
+var t_from: table<string>
+var t_to: table<string>
+var t_exec: table<i64>
+var s_name: table<string>
+var s_target: table<string>
+var s_args: table<string>
+var e_name: table<string>
+var e_append: table<string>
+var a_ext: table<string>
+var a_cmd: table<string>
+var g_last_rc: i64 = 0
+
+namespace tiwi {
+
+pub func app(id: string, name: string, version: string, publisher: string) {
+    if id != "" { g_id = id }
+    if name != "" { g_name = name }
+    if version != "" { g_version = version }
+    g_publisher = publisher
+}
+
+pub func preset(p: string) {
+    if p != "" { g_preset = p }
+}
+
+pub func format(f: string) {
+    if f != "" { g_format = f }
+}
+
+pub func compile(c: string) {
+    if c != "" { g_compile = c }
+}
+
+pub func optimize(o: string) {
+    g_optimize = o
+}
+
+pub func trm(require: string, bundle: bool, home: string) {
+    if require != "" { g_trm_req = require }
+    g_trm_bundle = bundle
+    if home != "" { g_trm_home = home }
+}
+
+pub func out_dir(o: string) {
+    if o != "" { g_out = o }
+}
+
+pub func install_dir(o: string) {
+    g_install = o
+}
+
+pub func trm_source(o: string) {
+    g_trm_source = o
+}
+
+pub func setup_template(o: string) {
+    g_template = o
+}
+
+pub func uninstall_cmd(o: string) {
+    g_uninst_cmd = o
+}
+
+pub func entry(o: string) {
+    g_entry = o
+}
+
+// 安装树文件（from 相对运行目录；to 为安装树内路径；exec 标记主程序）
+pub func file(from: string, to: string, exec: bool) {
+    table_push(t_from, from)
+    table_push(t_to, to)
+    var e: i64 = 0
+    if exec { e = 1 }
+    table_push(t_exec, e)
+}
+
+pub func shortcut(name: string, target: string, args: string) {
+    table_push(s_name, name)
+    table_push(s_target, target)
+    table_push(s_args, args)
+}
+
+pub func env(name: string, append: string) {
+    table_push(e_name, name)
+    table_push(e_append, append)
+}
+
+pub func assoc(ext: string, cmd: string) {
+    table_push(a_ext, ext)
+    table_push(a_cmd, cmd)
+}
+
+// ---------------- 内部工具 ----------------
+
+func len_t(t: table<string>) -> i64 {
+    var c: i64 = 0
+    for x in t {
+        c = c + 1
+    }
+    return c
+}
+
+func b2s(v: bool) -> string {
+    if v { return "true" }
+    return "false"
+}
+
+// JSON 字符串转义：\ → \\  " → \"  \n→\\n  \r→\\r  \t→\\t
+func esc(s: string) -> string {
+    var out: string = ""
+    var n: i64 = str_len(s)
+    var i: i64 = 0
+    while i < n {
+        var c: string = str_char(s, i)
+        var cp: i64 = char_code(c)
+        if c == "\\" {
+            out = out + "\\\\"
+        } else if c == "\"" {
+            out = out + "\\\""
+        } else if cp == 10 {
+            out = out + "\\n"
+        } else if cp == 13 {
+            out = out + "\\r"
+        } else if cp == 9 {
+            out = out + "\\t"
+        } else {
+            out = out + c
+        }
+        i = i + 1
+    }
+    return out
+}
+
+// 序列化 JSON 清单（与 Rust Project serde 结构一致，全量输出，容忍回读）
+func to_json() -> string {
+    var b: string = ""
+    b = b + "{\"format\":1,\"app\":{\"id\":\"" + esc(g_id) + "\",\"name\":\"" + esc(g_name) + "\","
+    b = b + "\"version\":\"" + esc(g_version) + "\",\"publisher\":\"" + esc(g_publisher) + "\"},"
+    b = b + "\"preset\":\"" + esc(g_preset) + "\","
+    b = b + "\"payload\":{\"format\":\"" + esc(g_format) + "\",\"compile\":\"" + esc(g_compile) + "\","
+    b = b + "\"entry\":\"" + esc(g_entry) + "\",\"optimize\":\"" + esc(g_optimize) + "\"},"
+    b = b + "\"trm\":{\"require\":\"" + esc(g_trm_req) + "\",\"bundle\":" + b2s(g_trm_bundle) + ",\"home\":\"" + esc(g_trm_home) + "\"},"
+    b = b + "\"toolchain\":{\"include\":[],\"exclude\":[]},"
+    b = b + "\"files\":["
+    var i: i64 = 0
+    while i < len_t(t_from) {
+        var ex: string = "false"
+        if t_exec[i] != 0 { ex = "true" }
+        if i > 0 { b = b + "," }
+        b = b + "{\"from\":\"" + esc(t_from[i]) + "\",\"to\":\"" + esc(t_to[i]) + "\",\"exec\":" + ex + "}"
+        i = i + 1
+    }
+    b = b + "],\"shortcuts\":["
+    i = 0
+    while i < len_t(s_name) {
+        if i > 0 { b = b + "," }
+        b = b + "{\"name\":\"" + esc(s_name[i]) + "\",\"target\":\"" + esc(s_target[i]) + "\",\"args\":\"" + esc(s_args[i]) + "\"}"
+        i = i + 1
+    }
+    b = b + "],\"env\":["
+    i = 0
+    while i < len_t(e_name) {
+        if i > 0 { b = b + "," }
+        b = b + "{\"name\":\"" + esc(e_name[i]) + "\",\"append\":\"" + esc(e_append[i]) + "\"}"
+        i = i + 1
+    }
+    b = b + "],\"assoc\":["
+    i = 0
+    while i < len_t(a_ext) {
+        if i > 0 { b = b + "," }
+        b = b + "{\"ext\":\"" + esc(a_ext[i]) + "\",\"cmd\":\"" + esc(a_cmd[i]) + "\"}"
+        i = i + 1
+    }
+    b = b + "],\"uninstall\":{\"cmd\":\"" + esc(g_uninst_cmd) + "\"},"
+    b = b + "\"build\":{\"out_dir\":\"" + esc(g_out) + "\",\"install_dir\":\"" + esc(g_install) + "\","
+    b = b + "\"trm_source\":\"" + esc(g_trm_source) + "\",\"setup_template\":\"" + esc(g_template) + "\"}}"
+    return b
+}
+
+// 执行命令并捕获输出（重定向 + 读回），退出码存 g_last_rc
+func run_capture(cmd: string) -> string {
+    var tmp: string = ".tiwi_out_" + to_string(time_now()) + "_" + to_string(rand_range(10000, 99999)) + ".tmp"
+    var full: string = cmd + " > " + tmp + " 2>&1"
+    var rc: i32 = 0
+    unsafe {
+        rc = system(full)
+    }
+    g_last_rc = rc
+    var out: string = file_read(tmp)
+    file_delete(tmp)
+    return out
+}
+
+// 构建安装包：序列化清单 → 写 .tiwi.json → 调 tiwi CLI。返回 0=成功。
+pub func build() -> i64 {
+    var json: string = to_json()
+    var proj: string = g_name + "-" + g_version + ".tiwi.json"
+    if !file_write(proj, json) {
+        println("[E_TIWI] 清单写入失败: " + proj)
+        return 1
+    }
+    println("[tiwi] 清单: " + proj)
+    var out: string = run_capture("tiwi --build \"" + proj + "\"")
+    println(out)
+    if g_last_rc != 0 {
+        println("[E_TIWI] tiwi CLI 构建失败（请确认 tiwi 在 PATH，或用 TIWI 别名可执行）")
+        return 1
+    }
+    println("[ok] 构建完成")
+    return 0
+}
+}
