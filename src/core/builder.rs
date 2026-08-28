@@ -1,6 +1,7 @@
 //! 构建流水线：收集 → payload zip → 组装 setup.exe → 清单产物 + SHA256SUMS
 use crate::core::appender;
 use crate::core::checksum;
+use crate::core::preset::needs_trm;
 use crate::core::manifest::{sanitize_name, Project};
 use std::fs;
 use std::io::Write;
@@ -76,6 +77,29 @@ pub fn build(proj: &Project, proj_dir: &Path, out_override: Option<&Path>) -> Re
                 .map_err(|e| format!("zip 条目 {entry}: {e}"))?;
             zw.write_all(&data).map_err(|e| e.to_string())?;
         }
+        // 1b) TRM / 精简工具链载荷（preset != bare 且 trm.bundle 且设 trm_source）
+        if needs_trm(proj) && proj.trm.bundle && !proj.build.trm_source.is_empty() {
+            let src_dir = proj_dir.join(&proj.build.trm_source);
+            if src_dir.is_dir() {
+                for rel in walk_dir(&src_dir)? {
+                    let data = fs::read(src_dir.join(&rel)).map_err(|e| format!("读 trm 源 {}: {e}", rel))?;
+                    zw.start_file(format!("trm/{}", rel), opts).map_err(|e| e.to_string())?;
+                    zw.write_all(&data).map_err(|e| e.to_string())?;
+                    if rel.starts_with("toolchain/") {
+                        // trm_source/toolchain/bin/X → payload toolchain/X（精简链应落在 C:\tie\bin）
+                        let mut rest = rel.trim_start_matches("toolchain/");
+                        if let Some(r2) = rest.strip_prefix("bin/") {
+                            rest = r2;
+                        }
+                        zw.start_file(format!("toolchain/{}", rest), opts).map_err(|e| e.to_string())?;
+                        zw.write_all(&data).map_err(|e| e.to_string())?;
+                    }
+                }
+                println!("[stage] trm 载荷已打包: {}", src_dir.display());
+            } else {
+                println!("[warn] trm_source 不存在: {}", src_dir.display());
+            }
+        }
         let mjson = proj.to_json()?;
         zw.start_file("manifest.json", opts).map_err(|e| e.to_string())?;
         zw.write_all(mjson.as_bytes()).map_err(|e| e.to_string())?;
@@ -99,3 +123,27 @@ pub fn build(proj: &Project, proj_dir: &Path, out_override: Option<&Path>) -> Re
 }
 
 fn root_join(root: &str, ext: &str) -> String { format!("{root}{ext}") }
+
+/// 递归收集目录相对路径（反斜杠分隔，与 zip 条目一致）
+fn walk_dir(dir: &Path) -> Result<Vec<String>, String> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let rd = fs::read_dir(&d).map_err(|e| format!("读目录 {}: {e}", d.display()))?;
+        for ent in rd {
+            let ent = ent.map_err(|e| e.to_string())?;
+            let p = ent.path();
+            let rel = p.strip_prefix(dir)
+                .map_err(|_| "路径前缀剥离失败".to_string())?
+                .to_string_lossy()
+                .replace('\\', "/");
+            if p.is_dir() {
+                stack.push(p);
+            } else {
+                out.push(rel);
+            }
+        }
+    }
+    out.sort();
+    Ok(out)
+}

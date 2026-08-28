@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "app": { "id": "org.tie.trmapp", "name": "trm-app", "version": "0.2.0", "publisher": "tie-lang" },
+  "preset": "runtime-toolchain",
+  "payload": { "format": "binary", "compile": "target", "entry": "app/hello.txt", "optimize": "-O2" },
+  "trm": { "require": "^0", "bundle": true, "home": "C:\\tie\\trm" },
+  "toolchain": { "include": [], "exclude": [] },
+  "files": [ { "from": "hello.txt", "to": "app/hello.txt", "exec": false } ],
+  "shortcuts": [ { "name": "Hello", "target": "@app/app/hello.txt", "args": "" } ],
+  "env": [ { "name": "PATH", "append": "@app" } ],
+  "assoc": [ { "ext": ".hlo", "cmd": "@app/app/hello.txt" } ],
+  "uninstall": { "cmd": "" },
+  "build": { "out_dir": "out", "install_dir": "", "trm_source": "trmkit" }
+}
