@@ -1,0 +1,5 @@
+# 连接器：使用 LLVM 系 lld（对齐 tie/LLVM 工具链哲学）
+# rust-lld 随 Rust 工具链自带；如需 tie 自带的 lld-link，改指绝对路径：
+#   linker = "F:/Projects/tie-repo/tie-main/dist/tie-2026.1/bin/llvm/bin/lld-link.exe"
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld"

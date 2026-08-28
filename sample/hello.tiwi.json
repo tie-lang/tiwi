@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "app": { "id": "org.tie.hello", "name": "hello-app", "version": "1.0.0", "publisher": "tie-lang" },
+  "preset": "bare",
+  "payload": { "format": "binary", "compile": "target", "entry": "app/hello.txt", "optimize": "-O2" },
+  "trm": { "require": "^0", "bundle": false, "home": "C:\\tie\\trm" },
+  "toolchain": { "include": [], "exclude": [] },
+  "files": [
+    { "from": "hello.txt", "to": "app/hello.txt", "exec": false }
+  ],
+  "shortcuts": [ { "name": "Hello", "target": "@app/app/hello.txt", "args": "" } ],
+  "env": [],
+  "assoc": [],
+  "uninstall": { "cmd": "" },
+  "build": { "out_dir": "out", "install_dir": "", "trm_source": "" }
+}
