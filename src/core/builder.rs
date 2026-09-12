@@ -35,7 +35,7 @@ fn resolve_template(proj: &Project, proj_dir: &Path) -> Option<PathBuf> {
         let p = proj_dir.join(&proj.build.setup_template);
         if p.exists() { return Some(p); }
     }
-    if let Ok(e) = std::env::var("TIWI_SETUP_TEMPLATE") {
+    if let Ok(e) = std::env::var("TWI_SETUP_TEMPLATE") {
         let p = PathBuf::from(e);
         if p.exists() { return Some(p); }
     }
@@ -108,7 +108,7 @@ pub fn build(proj: &Project, proj_dir: &Path, out_override: Option<&Path>) -> Re
 
     // 2) 组装自解压 setup.exe
     let template = resolve_template(proj, proj_dir)
-        .ok_or_else(|| "未找到 setup 模板（设 TIWI_SETUP_TEMPLATE 或放 res/setup-template.exe）".to_string())?;
+        .ok_or_else(|| "未找到 setup 模板（设 TWI_SETUP_TEMPLATE 或放 res/setup-template.exe）".to_string())?;
     appender::assemble(&template, &payload_zip, &setup_exe)?;
 
     // 3) 清单产物

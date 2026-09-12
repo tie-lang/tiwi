@@ -88,7 +88,7 @@ pub struct BuildOpt {
     pub out_dir: String,
     pub install_dir: String,
     pub trm_source: String,
-    // bundle 真实文件时的本地模板安装器（缺省找 res/setup-template.exe 与 env TIWI_SETUP_TEMPLATE）
+    // bundle 真实文件时的本地模板安装器（缺省找 res/setup-template.exe 与 env TWI_SETUP_TEMPLATE）
     pub setup_template: String,
 }
 

@@ -2,16 +2,16 @@
 //! 语义对齐 tie-install-builder 设计文档 §5/§7/§9：
 //!   预设 bare | trm-bundled | trm-detect | runtime-toolchain
 //!   探测→安装→部署→快捷方式→环境变量→关联→卸载注册→镜像台账
-//! 测试钩子（沙箱）：TIWI_SIM=1 时拦截系统类写操作，并改用
-//!   TIWI_SIM_TARGET / TIWI_SIM_START / TIWI_SIM_TRM_HOME /
-//!   TIWI_SIM_TIE_HOME / TIWI_SIM_MIRROR。
+//! 测试钩子（沙箱）：TWI_SIM=1 时拦截系统类写操作，并改用
+//!   TWI_SIM_TARGET / TWI_SIM_START / TWI_SIM_TRM_HOME /
+//!   TWI_SIM_TIE_HOME / TWI_SIM_MIRROR。
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tiwi::core::appender;
-use tiwi::core::manifest::{sanitize_name, Project};
-use tiwi::core::preset::{parse_preset, Preset};
+use twi::core::appender;
+use twi::core::manifest::{sanitize_name, Project};
+use twi::core::preset::{parse_preset, Preset};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -29,7 +29,7 @@ fn current_exe() -> Result<PathBuf, String> {
     std::env::current_exe().map_err(|e| format!("定位自身: {e}"))
 }
 
-fn sim() -> bool { std::env::var("TIWI_SIM") == Ok("1".to_string()) }
+fn sim() -> bool { std::env::var("TWI_SIM") == Ok("1".to_string()) }
 
 fn env_or(key: &str) -> Option<String> { std::env::var(key).ok().filter(|s| !s.is_empty()) }
 
@@ -39,7 +39,7 @@ fn run(uninstall: bool) -> Result<(), String> {
         return uninstall_app(&self_path);
     }
 
-    let tmp = std::env::temp_dir().join(format!("tiwi-{}", nanos()));
+    let tmp = std::env::temp_dir().join(format!("twi-{}", nanos()));
     fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
 
     // 1) 提取尾随载荷并展开
@@ -64,8 +64,8 @@ fn run(uninstall: bool) -> Result<(), String> {
     deploy(&mut arc, &tmp, &target, &proj)?;
 
     // 5) 保留安装清单与镜像台账（卸载用）
-    fs::create_dir_all(target.join(".tiwi")).map_err(|e| e.to_string())?;
-    fs::write(target.join(".tiwi/manifest.json"), proj.to_json()?).map_err(|e| e.to_string())?;
+    fs::create_dir_all(target.join(".twi")).map_err(|e| e.to_string())?;
+    fs::write(target.join(".twi/manifest.json"), proj.to_json()?).map_err(|e| e.to_string())?;
     let mirror = mirror_path(&proj)?;
     write_mirror(&mirror, &target, &proj)?;
 
@@ -90,7 +90,7 @@ fn run(uninstall: bool) -> Result<(), String> {
 
 fn target_dir(proj: &Project) -> PathBuf {
     if sim() {
-        if let Some(t) = env_or("TIWI_SIM_TARGET") { return PathBuf::from(t); }
+        if let Some(t) = env_or("TWI_SIM_TARGET") { return PathBuf::from(t); }
     }
     if !proj.build.install_dir.is_empty() {
         return PathBuf::from(&proj.build.install_dir);
@@ -103,7 +103,7 @@ fn target_dir(proj: &Project) -> PathBuf {
 
 fn start_root(proj: &Project) -> PathBuf {
     if sim() {
-        if let Some(s) = env_or("TIWI_SIM_START") { return PathBuf::from(s); }
+        if let Some(s) = env_or("TWI_SIM_START") { return PathBuf::from(s); }
     }
     let base = env_or("APPDATA").unwrap_or_else(|| ".".into());
     let folder = sanitize_name(&proj.app.name, "apps");
@@ -112,7 +112,7 @@ fn start_root(proj: &Project) -> PathBuf {
 
 fn trm_home(proj: &Project) -> PathBuf {
     if sim() {
-        if let Some(t) = env_or("TIWI_SIM_TRM_HOME") { return PathBuf::from(t); }
+        if let Some(t) = env_or("TWI_SIM_TRM_HOME") { return PathBuf::from(t); }
     }
     if let Some(t) = env_or("TIE_TRM_HOME") { return PathBuf::from(t); }
     let h = if proj.trm.home.is_empty() { "C:\\tie\\trm".to_string() } else { proj.trm.home.clone() };
@@ -121,16 +121,16 @@ fn trm_home(proj: &Project) -> PathBuf {
 
 fn tie_home() -> PathBuf {
     if sim() {
-        if let Some(t) = env_or("TIWI_SIM_TIE_HOME") { return PathBuf::from(t); }
+        if let Some(t) = env_or("TWI_SIM_TIE_HOME") { return PathBuf::from(t); }
     }
     PathBuf::from("C:\\tie")
 }
 
 fn mirror_path(proj: &Project) -> Result<PathBuf, String> {
     let dir = if sim() {
-        PathBuf::from(env_or("TIWI_SIM_MIRROR").unwrap_or_else(|| ".".into()))
+        PathBuf::from(env_or("TWI_SIM_MIRROR").unwrap_or_else(|| ".".into()))
     } else {
-        PathBuf::from(env_or("APPDATA").ok_or("缺 APPDATA")?).join("tiwi/installed")
+        PathBuf::from(env_or("APPDATA").ok_or("缺 APPDATA")?).join("twi/installed")
     };
     fs::create_dir_all(&dir).map_err(|e| format!("镜像目录: {e}"))?;
     Ok(dir.join(sanitize_name(&proj.app.id, "app") + ".json"))
@@ -397,9 +397,9 @@ fn read_mirror(path: &Path) -> Result<Mirror, String> {
 fn uninstall_app(self_path: &Path) -> Result<(), String> {
     // 通过内置镜像台账定位（先在本目录旁找用户台账）
     let dir = if sim() {
-        PathBuf::from(env_or("TIWI_SIM_MIRROR").unwrap_or_else(|| ".".into()))
+        PathBuf::from(env_or("TWI_SIM_MIRROR").unwrap_or_else(|| ".".into()))
     } else {
-        PathBuf::from(env_or("APPDATA").ok_or("缺 APPDATA")?).join("tiwi/installed")
+        PathBuf::from(env_or("APPDATA").ok_or("缺 APPDATA")?).join("twi/installed")
     };
     let mut found: Option<PathBuf> = None;
     if let Ok(rd) = fs::read_dir(&dir) {

@@ -1,21 +1,21 @@
 [package]
-name = "tiwi"
+name = "twi"
 version = "0.1.0"
 edition = "2021"
-description = "tiwi — tie 安装程序制作器 (FLTK/Rust, Windows)"
+description = "twi — tie 安装程序制作器 (FLTK/Rust, Windows)"
 license-file = "LICENSE"
 autobins = false
 
 # 六边形架构：core(纯逻辑库) + 两个二进制共芯
-#   bin/tiwi  —— GUI(FLTK) ；--build 时退化为无头 CLI
+#   bin/twi  —— GUI(FLTK) ；--build 时退化为无头 CLI
 #   bin/setup —— 自解压安装器（复用 core 的 manifest/appender）
 [lib]
-name = "tiwi"
+name = "twi"
 path = "src/lib.rs"
 
 [[bin]]
-name = "tiwi"
-path = "src/bin/tiwi.rs"
+name = "twi"
+path = "src/bin/twi.rs"
 
 [[bin]]
 name = "setup"

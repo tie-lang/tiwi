@@ -1,0 +1,33 @@
+type tie<logic>
+// hello.twi —— twi tie 库的演示脚本（Inno 风格）。
+// 编译：tiec.exe tie/demo/hello.twi  →  tie/demo/hello.exe
+// 运行：在 tie/demo 目录执行 hello.exe（twi CLI 需在 PATH）
+// 效果：脚本先程序化生成 hello.txt，然后登记文件/快捷方式/环境变量/
+// 文件关联，调用 twi.build() 产出 hello-app-1.0.0.setup.exe。
+import "../twi.tie"
+
+func main() {
+    // 程序化准备待安装文件（演示 tie 脚本的可编程性）
+    var ok: bool = file_write("hello.txt", "Hello from twi demo! (tie 脚本构建)\r\n")
+    if !ok {
+        println("[E_DEMO] 生成 hello.txt 失败")
+        panic("demo 中止")
+    }
+
+    twi.app("org.tie.hello", "hello-app", "1.0.0", "tie-lang")
+    twi.preset("bare")
+    twi.format("binary")
+    twi.out_dir("out")
+    // 自解压模板指向 twi 仓库 res/（也可用环境变量 TWI_SETUP_TEMPLATE 覆盖）
+    twi.setup_template("../../res/setup-template.exe")
+
+    twi.file("hello.txt", "hello.txt", false)
+    twi.shortcut("HelloApp", "@app/hello.txt", "")
+    twi.env("HELLO_HOME", "@app")
+    twi.assoc(".hello", "@app/hello.txt")
+
+    var rc: i64 = twi.build()
+    if rc != 0 {
+        panic("demo 构建失败")
+    }
+}

@@ -1,15 +1,15 @@
 type tie<class>
-// tiwi.tie —— tiwi 的 tie 语言客户端库（Inno 风格脚本化安装包制作）。
+// twi.tie —— twi 的 tie 语言客户端库（Inno 风格脚本化安装包制作）。
 // 用法（tie 脚本，tiec 编译后运行）：
-//   import "./tiwi.tie"
-//   tiwi.app("my-app", "org.tie.my", "1.0.0", "ACME")
-//   tiwi.preset("trm-detect")
-//   tiwi.file("bin/app.exe", "app.exe", true)
-//   tiwi.shortcut("MyApp", "@app/app.exe", "")
-//   tiwi.build()
+//   import "./twi.tie"
+//   twi.app("my-app", "org.tie.my", "1.0.0", "ACME")
+//   twi.preset("trm-detect")
+//   twi.file("bin/app.exe", "app.exe", true)
+//   twi.shortcut("MyApp", "@app/app.exe", "")
+//   twi.build()
 // 语义：状态登记在模块级表中（命名空间内函数裸引用，同 std/json.tie
-// 的模块级全局模式），build() 序列化为 <name>-<version>.tiwi.json 清单，
-// 然后调用 tiwi 命令行（`tiwi --build <json>`，PATH 查找）组装 setup.exe。
+// 的模块级全局模式），build() 序列化为 <name>-<version>.twi.json 清单，
+// 然后调用 twi 命令行（`twi --build <json>`，PATH 查找）组装 setup.exe。
 // 零外部依赖：仅用底座原语 + libc system（链接 msvcrt，同 std/process.tie 方案）。
 // 路径注意：清单文件落在当前工作目录，files.from 相对运行目录解析。
 
@@ -46,7 +46,7 @@ var a_ext: table<string>
 var a_cmd: table<string>
 var g_last_rc: i64 = 0
 
-namespace tiwi {
+namespace twi {
 
 pub func app(id: string, name: string, version: string, publisher: string) {
     if id != "" { g_id = id }
@@ -215,7 +215,7 @@ func to_json() -> string {
 
 // 执行命令并捕获输出（重定向 + 读回），退出码存 g_last_rc
 func run_capture(cmd: string) -> string {
-    var tmp: string = ".tiwi_out_" + to_string(time_now()) + "_" + to_string(rand_range(10000, 99999)) + ".tmp"
+    var tmp: string = ".twi_out_" + to_string(time_now()) + "_" + to_string(rand_range(10000, 99999)) + ".tmp"
     var full: string = cmd + " > " + tmp + " 2>&1"
     var rc: i32 = 0
     unsafe {
@@ -227,19 +227,19 @@ func run_capture(cmd: string) -> string {
     return out
 }
 
-// 构建安装包：序列化清单 → 写 .tiwi.json → 调 tiwi CLI。返回 0=成功。
+// 构建安装包：序列化清单 → 写 .twi.json → 调 twi CLI。返回 0=成功。
 pub func build() -> i64 {
     var json: string = to_json()
-    var proj: string = g_name + "-" + g_version + ".tiwi.json"
+    var proj: string = g_name + "-" + g_version + ".twi.json"
     if !file_write(proj, json) {
-        println("[E_TIWI] 清单写入失败: " + proj)
+        println("[E_TWI] 清单写入失败: " + proj)
         return 1
     }
-    println("[tiwi] 清单: " + proj)
-    var out: string = run_capture("tiwi --build \"" + proj + "\"")
+    println("[twi] 清单: " + proj)
+    var out: string = run_capture("twi --build \"" + proj + "\"")
     println(out)
     if g_last_rc != 0 {
-        println("[E_TIWI] tiwi CLI 构建失败（请确认 tiwi 在 PATH，或用 TIWI 别名可执行）")
+        println("[E_TWI] twi CLI 构建失败（请确认 twi 在 PATH，或用 TWI 别名可执行）")
         return 1
     }
     println("[ok] 构建完成")

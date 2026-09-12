@@ -27,7 +27,7 @@ pub fn extract_self(path: &Path) -> Result<Vec<u8>, String> {
     let mark_off = total - TAIL;
     if len == 0 || len > mark_off { return Err("载荷长度非法".into()); }
     if &all[mark_off..mark_off + MARKER.len()] != MARKER {
-        return Err("载荷标志不匹配（非 tiwi 安装包）".into());
+        return Err("载荷标志不匹配（非 twi 安装包）".into());
     }
     let payload_start = mark_off - len;
     let mut out = Vec::with_capacity(len);

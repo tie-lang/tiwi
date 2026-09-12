@@ -1,4 +1,4 @@
-//! tiwi 入口：`--build <proj> [--out <dir>]` 走无头 CLI；无参则启动 FLTK GUI。
+//! twi 入口：`--build <proj> [--out <dir>]` 走无头 CLI；无参则启动 FLTK GUI。
 //! GUI 是 core 的薄适配层（六边形架构的"适配器"）：UI 不持有任何构建逻辑，
 //! 布局/控件工厂抽到 gui 模块，选项声明与构建装配分离。
 mod gui;
@@ -12,8 +12,8 @@ use fltk::{
 };
 use gui::{field, choice, checkrow, header_of, section, COL, CONTENT_W, MARGIN, WIN_H, WIN_W};
 use std::sync::{Arc, Mutex};
-use tiwi::core::builder;
-use tiwi::core::manifest::{FileMap, Project};
+use twi::core::builder;
+use twi::core::manifest::{FileMap, Project};
 
 type Rows = Arc<Mutex<Vec<Vec<String>>>>;
 
@@ -35,7 +35,7 @@ fn headless(args: &[String]) {
     let proj_path = match args.get(2) {
         Some(p) => p,
         None => {
-            eprintln!("[E_ARGS] 用法: tiwi --build <project.tiwi.json> [--out <dir>]");
+            eprintln!("[E_ARGS] 用法: twi --build <project.twi.json> [--out <dir>]");
             std::process::exit(2);
         }
     };
@@ -58,7 +58,7 @@ fn headless(args: &[String]) {
 
 fn run_gui() {
     let mut app = app::App::default().with_scheme(app::Scheme::Gleam);
-    let mut win = Window::new(90, 60, WIN_W, WIN_H, "tiwi — tie 安装程序制作器");
+    let mut win = Window::new(90, 60, WIN_W, WIN_H, "twi — tie 安装程序制作器");
     win.make_resizable(true);
     win.size_range(760, 660, 2048, 1600);
 

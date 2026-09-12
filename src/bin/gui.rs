@@ -1,4 +1,4 @@
-//! GUI 布局助手（模块化：区/行/控件工厂 + 常量），供 bin/tiwi.rs 适配层复用。
+//! GUI 布局助手（模块化：区/行/控件工厂 + 常量），供 bin/twi.rs 适配层复用。
 //! 界面上的每个字段行 = section/field/choice/checkrow 一行声明，新增选项只加一行调用。
 use fltk::{
     button::CheckButton,
